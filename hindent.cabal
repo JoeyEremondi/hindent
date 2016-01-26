@@ -39,6 +39,7 @@ library
                      HIndent.Comments
                      HIndent.Styles.Fundamental
                      HIndent.Styles.ChrisDone
+                     HIndent.Styles.ElmLang
                      HIndent.Styles.JohanTibell
                      HIndent.Styles.Gibiansky
   build-depends:     base >= 4.7 && <5

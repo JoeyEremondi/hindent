@@ -29,6 +29,7 @@ import           HIndent.Styles.ChrisDone (chrisDone)
 import           HIndent.Styles.Fundamental (fundamental)
 import           HIndent.Styles.Gibiansky (gibiansky)
 import           HIndent.Styles.JohanTibell (johanTibell)
+import           HIndent.Styles.ElmLang (elmLang)
 import           HIndent.Types
 
 import           Control.Monad.State.Strict
@@ -228,4 +229,4 @@ testAst x =
 -- | Styles list, useful for programmatically choosing.
 styles :: [Style]
 styles =
-  [fundamental,chrisDone,johanTibell,gibiansky]
+  [fundamental,chrisDone,johanTibell,gibiansky,elmLang]
