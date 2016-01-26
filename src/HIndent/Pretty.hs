@@ -21,6 +21,7 @@ module HIndent.Pretty
   -- * Insertion
   , write
   , newline
+  , twolines
   , space
   , comma
   , int
@@ -255,6 +256,12 @@ getLineNum = gets psLine
 newline :: MonadState (PrintState s) m => m ()
 newline =
   do write "\n"
+     modify (\s -> s {psNewline = True})
+
+-- | Output two newline.
+twolines :: MonadState (PrintState s) m => m ()
+twolines =
+  do write "\n\n"
      modify (\s -> s {psNewline = True})
 
 -- | Set the context to a case context, where RHS is printed with -> .

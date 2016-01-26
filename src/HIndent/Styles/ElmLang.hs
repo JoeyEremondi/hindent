@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
+
 
 -- | Chris Done's style.
 --
@@ -45,7 +47,7 @@ elmLang :: Style
 elmLang =
   Style {styleName = "elm-lang"
         ,styleAuthor = "Joey Eremondi"
-        ,styleDescription = "Elm Lang Style. Documented here: <https://github.com/chrisdone/haskell-style-guide>"
+        ,styleDescription = "Elm Lang Style. Documented here: <https://gist.github.com/evancz/0a1f3717c92fe71702be>"
         ,styleInitialState = State
         ,styleExtenders =
            [Extender exp
@@ -53,14 +55,49 @@ elmLang =
            ,Extender rhs
            ,Extender contextualGuardedRhs
            ,Extender stmt
-           ,Extender decl]
+           ,Extender decl
+           ,Extender prettyAlt
+           ,Extender prettyModule]
         ,styleDefConfig =
            defaultConfig {configMaxColumns = 80
-                         ,configIndentSpaces = 2}
+                         ,configIndentSpaces = 2
+                         , configClearEmptyLines = True}
         ,styleCommentPreprocessor = return}
 
 --------------------------------------------------------------------------------
 -- Extenders
+
+prettyModule x =
+    case x of
+      Module _ mayModHead pragmas imps decls ->
+        inter (do newline
+                  newline)
+              (mapMaybe (\(isNull,r) ->
+                           if isNull
+                              then Nothing
+                              else Just r)
+                        [(null pragmas,inter newline (map pretty pragmas))
+                        ,(case mayModHead of
+                            Nothing -> (True,return ())
+                            Just modHead -> (False,pretty modHead))
+                        ,(null imps,inter newline (map pretty imps))
+                        ,(null decls
+                         ,interOf newline
+                                  (map (\case
+                                          r@TypeSig{} -> (1,pretty r)
+                                          r -> (3,pretty r))
+                                       decls))])
+        where interOf i ((c,p):ps) =
+                case ps of
+                  [] -> p
+                  _ ->
+                    do p
+                       replicateM_ c i
+                       interOf i ps
+              interOf _ [] = return ()
+      XmlPage{} -> error "FIXME: No implementation for XmlPage."
+      XmlHybrid{} -> error "FIXME: No implementation for XmlHybrid."
+
 
 -- | Pretty print type signatures like
 --
@@ -144,7 +181,7 @@ unguardedrhs :: Rhs NodeInfo -> Printer t ()
 unguardedrhs (UnGuardedRhs _ e) =
   do indentSpaces <- getIndentSpaces
      indented indentSpaces $
-              swing (write " = ") (pretty e)
+              swing (write " =") (pretty e)
               --(dependOrNewline (write " = ")
               --                 e
               --                 pretty)
@@ -292,6 +329,9 @@ exp (Lambda _ ps b) =
                        (PBangPat {}):_ -> space
                        (PIrrPat {}):_ -> space
                        _ -> return ()
+exp (Do _ stmts) =
+  depend (write "do  ")
+         (lined (map pretty stmts))
 exp (Tuple _ boxed exps) =
   depend (write (case boxed of
                    Unboxed -> "(#"
@@ -312,7 +352,7 @@ exp (Case _ e alts) =
                 write " of")
      newline
      indentSpaces <- getIndentSpaces
-     indented indentSpaces (lined (map (\x -> withCaseContext True $ prettyAlt x >> newline) alts))
+     indented indentSpaces (lined (map (\x -> withCaseContext True $ pretty x >> newline) alts))
 exp (List _ es) =
   do (ok,st) <- sandbox renderFlat
      if ok
