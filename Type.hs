@@ -308,7 +308,7 @@ contentToSrcType variable content =
 termToSrcType :: Term1 Variable -> StateT NameState IO T.Canonical
 termToSrcType term =
   case term of
-    App1 func arg ->
+    (App1 func arg) ->
         do  srcFunc <- variableToSrcType func
             srcArg <- variableToSrcType arg
             case srcFunc of

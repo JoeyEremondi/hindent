@@ -337,7 +337,7 @@ space = write " "
 
 -- | Write a comma.
 comma :: MonadState (PrintState s) m => m ()
-comma = write ","
+comma = write ", "
 
 -- | Write an integral.
 int :: (Integral n, MonadState (PrintState s) m)
@@ -654,7 +654,7 @@ exp (Tuple _ boxed exps) =
   depend (write (case boxed of
                    Unboxed -> "(#"
                    Boxed -> "("))
-         (do prefixedLined ","
+         (do prefixedLined ", "
                            (map pretty exps)
              write (case boxed of
                       Unboxed -> "#)"
@@ -668,7 +668,7 @@ exp (TupleSection _ boxed mexps) =
                       Unboxed -> "#)"
                       Boxed -> ")"))
 exp (List _ es) =
-  brackets (prefixedLined ","
+  brackets (prefixedLined ", "
                           (map pretty es))
 exp (LeftSection _ e op) =
   parens (depend (do pretty e
@@ -682,13 +682,13 @@ exp (RecConstr _ n fs) =
   do indentSpaces <- getIndentSpaces
      depend (do pretty n
                 space)
-            (braces (prefixedLined ","
+            (braces (prefixedLined ", "
                                    (map (indented indentSpaces . pretty) fs)))
 exp (RecUpdate _ n fs) =
   do indentSpaces <- getIndentSpaces
      depend (do pretty n
                 space)
-            (braces (prefixedLined ","
+            (braces (prefixedLined ", "
                                    (map (indented indentSpaces . pretty) fs)))
 exp (EnumFrom _ e) =
   brackets (do pretty e
@@ -699,12 +699,12 @@ exp (EnumFromTo _ e f) =
                    (pretty f))
 exp (EnumFromThen _ e t) =
   brackets (depend (do pretty e
-                       write ",")
+                       write ", ")
                    (do pretty t
                        write " .."))
 exp (EnumFromThenTo _ e t f) =
   brackets (depend (do pretty e
-                       write ",")
+                       write ", ")
                    (depend (do pretty t
                                write " .. ")
                            (pretty f)))
@@ -714,7 +714,7 @@ exp (ListComp _ e qstmt) =
                               (write " |"))
                    (do space
                        prefixedLined
-                         ","
+                         ", "
                          (map (\(i,x) ->
                                  depend (if i == 0
                                             then return ()
@@ -997,7 +997,7 @@ instance Pretty ConDecl where
         depend (do pretty name
                    write " ")
                (do depend (write "{")
-                          (prefixedLined ","
+                          (prefixedLined ", "
                                          (map pretty fields))
                    write "}")
 
@@ -1023,7 +1023,7 @@ instance Pretty GuardedRhs where
       GuardedRhs _ stmts e ->
         do indented 1
                     (do prefixedLined
-                          ","
+                          ", "
                           (map (\p ->
                                   do space
                                      pretty p)

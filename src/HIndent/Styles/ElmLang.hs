@@ -23,7 +23,7 @@ import Language.Haskell.Exts.Annotated.Fixity
 import Language.Haskell.Exts.Annotated.Syntax
 import Language.Haskell.Exts.Parser (ParseResult(..))
 import Prelude hiding (exp)
-import Data.Monoid
+import Data.Monoid hiding (Alt)
 
 import qualified Language.Haskell.Exts.Annotated.Syntax as Syntax
 
@@ -32,11 +32,11 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as Syntax
 
 -- | A short function name.
 shortName :: Int64
-shortName = 10
+shortName = 20
 
--- | Column limit: 50
+-- | Column limit: 80
 smallColumnLimit :: Int64
-smallColumnLimit = 50
+smallColumnLimit = 80
 
 -- | Empty state.
 data State =
@@ -105,7 +105,7 @@ conDecl x =
       ConDecl _ name bangty ->
         depend (do pretty name
                    space)
-               (lined (map pretty bangty))
+               (spaced (map pretty bangty))
       InfixConDecl l a f b ->
         pretty (ConDecl l f [a,b])
       RecDecl _ name fields ->
@@ -115,6 +115,7 @@ conDecl x =
                                          (map pretty fields))
                    newline
                    write "}")
+
 
 
 -- | Pretty print type signatures like
@@ -138,10 +139,10 @@ decl (TypeSig _ names ty') =
                          (depend (write ":: ")
                                  (declTy ty'))
   where dependent =
-          depend (do inter (write ", ")
+          do inter (write ", ")
                            (map pretty names)
-                     write " :: ")
-                 (declTy ty')
+             write " :: "
+             declTy ty'
         declTy dty =
           case dty of
             TyForall _ mbinds mctx ty ->
@@ -161,9 +162,9 @@ decl (TypeSig _ names ty') =
                                  (depend (write "=> ")
                                          (prettyTy ty))
             TyFun _ a b ->
-              depend (do pretty a
-                         newline)
-                        (write " -> " >> pretty b)
+              do pretty a
+                 write " -> "
+                 pretty b
             _ -> prettyTy dty
         collapseFaps (TyFun _ arg result) = arg : collapseFaps result
         collapseFaps e = [e]
@@ -176,6 +177,13 @@ decl (TypeSig _ names ty') =
                        tys ->
                          prefixedLined "-> "
                                        (map pretty tys)
+decl (TypeDecl _ typehead typ) =
+  swing
+    (do  (write "type ")
+         (depend (pretty typehead)
+                 (write " =") ))
+        (pretty typ)
+
 decl e = prettyNoExt e
 
 -- | I want field updates to be dependent or newline.
@@ -190,6 +198,8 @@ fieldupdate e =
         pretty
     _ -> prettyNoExt e
 
+
+
 -- | Right-hand sides are dependent.
 rhs :: Rhs NodeInfo -> Printer t ()
 rhs grhs =
@@ -202,8 +212,7 @@ rhs grhs =
 unguardedrhs :: Rhs NodeInfo -> Printer t ()
 unguardedrhs (UnGuardedRhs _ e) =
   do indentSpaces <- getIndentSpaces
-     indented indentSpaces $
-              swing (write " =") (pretty e)
+     swing (write " =") (pretty e)
               --(dependOrNewline (write " = ")
               --                 e
               --                 pretty)
@@ -213,7 +222,7 @@ unguardedrhs e = prettyNoExt e
 unguardedalt :: Rhs NodeInfo -> Printer t ()
 unguardedalt (UnGuardedRhs _ e) =
   --dependOrNewline
-    swing (write " -> ") (pretty e)
+    swing (write " ->") (pretty e)
 --    e
 --    (indented 2 .
 --     pretty)
@@ -232,7 +241,7 @@ guardedrhs :: GuardedRhs NodeInfo -> Printer t ()
 guardedrhs (GuardedRhs _ stmts e) =
   indented 1
            (do prefixedLined
-                 ","
+                 ", "
                  (map (\p ->
                          do space
                             pretty p)
@@ -248,13 +257,13 @@ guardedalt :: GuardedRhs NodeInfo -> Printer t ()
 guardedalt (GuardedRhs _ stmts e) =
   indented 1
            (do (prefixedLined
-                  ","
+                  ", "
                   (map (\p ->
                           do space
                              pretty p)
                        stmts))
                dependOrNewline
-                 (write " -> ")
+                 (write " ->")
                  e
                  (indented 1 .
                   pretty))
@@ -279,6 +288,8 @@ stmt (Generator _ p e) =
 stmt e = prettyNoExt e
 
 
+prettyAlt (Alt ln (PParen _ p) galts mbinds) =
+  prettyAlt $ Alt ln p galts mbinds
 prettyAlt (Syntax.Alt _ p galts mbinds) =
         do pretty p
            rhs galts
@@ -320,12 +331,11 @@ exp e@(InfixApp _ a op b) =
 -- If the head is short we depend, otherwise we swing.
 exp (App _ op a) =
   do orig <- gets psIndentLevel
-     dependBind
-       (do (short,st) <- isShort f
+     (headIsShort,st) <- isShort f
+     (maybeSwing $ not headIsShort) (do
            put st
-           space
-           return short)
-       (\headIsShort ->
+           space)
+       (
           do let flats = map isFlat args
                  flatish =
                    length (filter not flats) <
@@ -351,7 +361,7 @@ exp (Lambda _ ps b) =
              dependOrNewline
                (write " -> ")
                b
-               (indented 1 .
+               (indented 2 .
                 pretty))
   where maybeSpace = case ps of
                        (PBangPat {}):_ -> space
@@ -360,6 +370,16 @@ exp (Lambda _ ps b) =
 exp (Do _ stmts) =
   depend (write "do  ")
          (lined (map pretty stmts))
+exp (RecConstr _ n fs) =
+  do indentSpaces <- getIndentSpaces
+     swing (pretty n)
+            (spaceBraces (prefixedLined ", "
+                                   (map pretty fs)))
+exp (RecUpdate _ n fs) =
+  do indentSpaces <- getIndentSpaces
+     swing (pretty n)
+            (spaceBraces (prefixedLined ", "
+                                   (map pretty fs)))
 exp (Tuple _ boxed exps) =
   depend (write (case boxed of
                    Unboxed -> "(#"
@@ -367,7 +387,7 @@ exp (Tuple _ boxed exps) =
          (do (fits,_) <- fitsOnOneLine p
              if fits
                 then p
-                else prefixedLined ","
+                else prefixedLined ", "
                                    (map pretty exps)
              write (case boxed of
                       Unboxed -> "#)"
@@ -395,7 +415,7 @@ exp (List _ es) =
   do (ok,st) <- sandbox renderFlat
      if ok
         then put st
-        else brackets (prefixedLined ","
+        else brackets (prefixedLined ", "
                                      (map pretty es))
   where renderFlat =
           do line <- gets psLine
@@ -446,7 +466,7 @@ multi orig args headIsShort =
                 then put st
                 else do newline
                         indentSpaces <- getIndentSpaces
-                        column (orig + indentSpaces)
+                        column (indentSpaces)
                                (lined (map pretty args))
 
 -- | Sandbox and render the node on a single line, return whether it's
@@ -591,3 +611,14 @@ dependOrNewline left right f =
         else do left
                 newline
                 (f right)
+
+-- | Wrap in braces.
+spaceBraces :: MonadState (PrintState s) m => m a -> m a
+spaceBraces p =
+  depend (write "{ ")
+         (do v <- p
+             write " }"
+             return v)
+
+maybeSwing True x y = swing x y
+maybeSwing False x y = x >> y
