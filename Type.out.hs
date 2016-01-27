@@ -48,18 +48,20 @@ data TermN a
   | TermN (Term1 (TermN a))
 
 
-record
-  :: Map.Map String (TermN a) -> TermN a -> TermN a
+record :: Map.Map String (TermN a)
+ -> TermN a -> TermN a
 record fs recc =
     TermN (Record1 fs recc)
 
 
 -- DESCRIPTORS
 data Descriptor =
-  Descriptor {_content :: Content
-             ,_rank :: Int
-             ,_mark :: Int
-             ,_copy :: Maybe Variable}
+  Descriptor
+    { _content :: Content
+    , _rank :: Int
+    , _mark :: Int
+    , _copy :: Maybe Variable
+    }
 
 
 data Content
@@ -137,28 +139,33 @@ type SchemeName = String
 
 
 data Scheme a b =
-  Scheme {_rigidQuantifiers :: [b]
-         ,_flexibleQuantifiers :: [b]
-         ,_constraint :: Constraint a b
-         ,_header :: Map.Map String (A.Located a)}
+  Scheme
+    { _rigidQuantifiers :: [b]
+    , _flexibleQuantifiers :: [b]
+    , _constraint :: Constraint a b
+    , _header :: Map.Map String (A.Located a)
+    }
 
 
 -- TYPE HELPERS
 infixr 9 ==>
 
 
-(==>) :: Type -> Type -> Type
+(==>) :: Type
+ -> Type -> Type
 (==>) a b =
     TermN (Fun1 a b)
 
 
-(<|) :: TermN a -> TermN a -> TermN a
+(<|) :: TermN a
+ -> TermN a -> TermN a
 (<|) f a =
     TermN (App1 f a)
 
 
 -- VARIABLE CREATION
-mkDescriptor :: Content -> Descriptor
+mkDescriptor :: Content
+ -> Descriptor
 mkDescriptor content =
     Descriptor {_content = content
                ,_rank = noRank
@@ -166,22 +173,26 @@ mkDescriptor content =
                ,_copy = Nothing}
 
 
-mkAtom :: Var.Canonical -> IO Variable
+mkAtom :: Var.Canonical
+ -> IO Variable
 mkAtom name =
     UF.fresh $ mkDescriptor (Atom name)
 
 
-mkVar :: Maybe Super -> IO Variable
+mkVar :: Maybe Super
+ -> IO Variable
 mkVar maybeSuper =
     UF.fresh $ mkDescriptor (Var Flex maybeSuper Nothing)
 
 
-mkNamedVar :: String -> IO Variable
+mkNamedVar :: String
+ -> IO Variable
 mkNamedVar name =
     UF.fresh $ mkDescriptor (Var Flex (toSuper name) Nothing)
 
 
-mkRigid :: String -> IO Variable
+mkRigid :: String
+ -> IO Variable
 mkRigid name =
     UF.fresh $
     mkDescriptor 
@@ -190,20 +201,25 @@ mkRigid name =
            (Just name))
 
 
-toSuper :: String -> Maybe Super
+toSuper :: String
+ -> Maybe Super
 toSuper name =
-    if List.isPrefixOf "number" name
-       then Just Number
-       else if List.isPrefixOf "comparable" name
-               then Just Comparable
-               else if List.isPrefixOf "appendable" name
-                       then Just Appendable
-                       else Nothing
+    if List.isPrefixOf "number" name then
+      Just Number
+
+    else if List.isPrefixOf "comparable" name then
+      Just Comparable
+
+    else if List.isPrefixOf "appendable" name then
+      Just Appendable
+
+    else
+      Nothing
 
 
 -- CONSTRAINT HELPERS
-monoscheme
-  :: Map.Map String (A.Located a) -> Scheme a b
+monoscheme :: Map.Map String (A.Located a)
+ -> Scheme a b
 monoscheme headers =
     Scheme [] [] CTrue headers
 
@@ -211,8 +227,8 @@ monoscheme headers =
 infixl 8 /\
 
 
-(/\)
-  :: Constraint a b -> Constraint a b -> Constraint a b
+(/\) :: Constraint a b
+ -> Constraint a b -> Constraint a b
 (/\) c1 c2 =
     case (c1,c2) of
       (CTrue,_) -> 
@@ -227,28 +243,28 @@ infixl 8 /\
 
 
 -- ex qs constraint == exists qs. constraint
-ex
-  :: [Variable] -> TypeConstraint -> TypeConstraint
+ex :: [Variable]
+ -> TypeConstraint -> TypeConstraint
 ex fqs constraint =
     CLet [Scheme [] fqs constraint Map.empty] CTrue
 
 
 -- fl qs constraint == forall qs. constraint
-fl
-  :: [Variable] -> TypeConstraint -> TypeConstraint
+fl :: [Variable]
+ -> TypeConstraint -> TypeConstraint
 fl rqs constraint =
     CLet [Scheme rqs [] constraint Map.empty] CTrue
 
 
-exists
-  :: (Type -> IO TypeConstraint) -> IO TypeConstraint
+exists :: (Type -> IO TypeConstraint)
+ -> IO TypeConstraint
 exists f =
     do  v <- mkVar Nothing
         ex [v] <$> f (VarN v)
 
 
-existsNumber
-  :: (Type -> IO TypeConstraint) -> IO TypeConstraint
+existsNumber :: (Type -> IO TypeConstraint)
+ -> IO TypeConstraint
 existsNumber f =
     do  v <- mkVar (Just Number)
         ex [v] <$> f (VarN v)
@@ -257,35 +273,38 @@ existsNumber f =
 -- CONVERT TO SOURCE TYPES
 -- TODO: Attach resulting type to the descriptor so that you
 -- never have to do extra work, particularly nice for aliased types
-toSrcType :: Variable -> IO T.Canonical
+toSrcType :: Variable
+ -> IO T.Canonical
 toSrcType variable =
     do  usedNames <- getVarNames variable
         State.evalStateT (variableToSrcType variable)
                          (makeNameState usedNames)
 
 
-variableToSrcType
-  :: Variable -> StateT NameState IO T.Canonical
+variableToSrcType :: Variable
+ -> StateT NameState IO T.Canonical
 variableToSrcType variable =
     do  descriptor <- liftIO $ UF.descriptor variable
         let mark =
                 _mark descriptor
-        if mark == occursMark
-           then return (T.Var "∞")
-           else do  liftIO $
-                      UF.modifyDescriptor variable
-                                          (\desc -> desc {_mark = occursMark})
-                    srcType <- 
-                      contentToSrcType variable
-                                       (_content descriptor)
-                    liftIO $
-                      UF.modifyDescriptor variable
-                                          (\desc -> desc {_mark = mark})
-                    return srcType
+        if mark == occursMark then
+          return (T.Var "∞")
+
+        else
+          do  liftIO $
+                UF.modifyDescriptor variable
+                                    (\desc -> desc {_mark = occursMark})
+              srcType <- 
+                contentToSrcType variable
+                                 (_content descriptor)
+              liftIO $
+                UF.modifyDescriptor variable
+                                    (\desc -> desc {_mark = mark})
+              return srcType
 
 
-contentToSrcType
-  :: Variable -> Content -> StateT NameState IO T.Canonical
+contentToSrcType :: Variable
+ -> Content -> StateT NameState IO T.Canonical
 contentToSrcType variable content =
     case content of
       Structure term -> 
@@ -315,8 +334,8 @@ contentToSrcType variable content =
 
 
 
-termToSrcType
-  :: Term1 Variable -> StateT NameState IO T.Canonical
+termToSrcType :: Term1 Variable
+ -> StateT NameState IO T.Canonical
 termToSrcType term =
     case term of
       App1 func arg -> 
@@ -356,14 +375,17 @@ termToSrcType term =
 
 -- MANAGE FRESH VARIABLE NAMES
 data NameState =
-  NameState {_freeNames :: [String]
-            ,_numberPrimes :: Int
-            ,_comparablePrimes :: Int
-            ,_appendablePrimes :: Int
-            ,_compAppendPrimes :: Int}
+  NameState
+    { _freeNames :: [String]
+    , _numberPrimes :: Int
+    , _comparablePrimes :: Int
+    , _appendablePrimes :: Int
+    , _compAppendPrimes :: Int
+    }
 
 
-makeNameState :: Set.Set String -> NameState
+makeNameState :: Set.Set String
+ -> NameState
 makeNameState usedNames =
     let 
       makeName suffix =
@@ -376,9 +398,8 @@ makeNameState usedNames =
       NameState freeNames 0 0 0 0
 
 
-getFreshName
-  :: (Monad m)
-  => Maybe Super -> StateT NameState m String
+getFreshName :: (Monad m)
+             => Maybe Super -> StateT NameState m String
 getFreshName maybeSuper =
     case maybeSuper of
       Nothing -> 
@@ -409,17 +430,21 @@ getFreshName maybeSuper =
 
 
 -- GET ALL VARIABLE NAMES
-getVarNames :: Variable -> IO (Set.Set String)
+getVarNames :: Variable
+ -> IO (Set.Set String)
 getVarNames var =
     do  desc <- UF.descriptor var
-        if _mark desc == getVarNamesMark
-           then return Set.empty
-           else do  UF.setDescriptor var
-                                     (desc {_mark = getVarNamesMark})
-                    getVarNamesHelp (_content desc)
+        if _mark desc == getVarNamesMark then
+          return Set.empty
+
+        else
+          do  UF.setDescriptor var
+                               (desc {_mark = getVarNamesMark})
+              getVarNamesHelp (_content desc)
 
 
-getVarNamesHelp :: Content -> IO (Set.Set String)
+getVarNamesHelp :: Content
+ -> IO (Set.Set String)
 getVarNamesHelp content =
     case content of
       Var _ _ (Just name) -> 
@@ -446,8 +471,8 @@ getVarNamesHelp content =
 
 
 
-getVarNamesTerm
-  :: Term1 Variable -> IO (Set.Set String)
+getVarNamesTerm :: Term1 Variable
+ -> IO (Set.Set String)
 getVarNamesTerm term =
     let 
       go =

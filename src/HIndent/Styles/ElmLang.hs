@@ -57,7 +57,8 @@ elmLang =
            ,Extender stmt
            ,Extender decl
            ,Extender prettyAlt
-           ,Extender prettyModule]
+           ,Extender prettyModule
+           , Extender conDecl]
         ,styleDefConfig =
            defaultConfig {configMaxColumns = 80
                          ,configIndentSpaces = 2
@@ -99,6 +100,23 @@ prettyModule x =
       XmlHybrid{} -> error "FIXME: No implementation for XmlHybrid."
 
 
+conDecl x =
+    case x of
+      ConDecl _ name bangty ->
+        depend (do pretty name
+                   space)
+               (lined (map pretty bangty))
+      InfixConDecl l a f b ->
+        pretty (ConDecl l f [a,b])
+      RecDecl _ name fields ->
+        swing (pretty name)
+               (do depend (write "{ ")
+                          (prefixedLined ", "
+                                         (map pretty fields))
+                   newline
+                   write "}")
+
+
 -- | Pretty print type signatures like
 --
 -- foo :: (Show x,Read x)
@@ -109,7 +127,7 @@ prettyModule x =
 --
 decl :: Decl NodeInfo -> Printer s ()
 decl (TypeSig _ names ty') =
-  do (fitting,st) <- isSmallFitting dependent
+  do (fitting,st) <- fitsInColumnLimit dependent
      if fitting
         then put st
         else do inter (write ", ")
@@ -142,6 +160,10 @@ decl (TypeSig _ names ty') =
                         indented (-3)
                                  (depend (write "=> ")
                                          (prettyTy ty))
+            TyFun _ a b ->
+              depend (do pretty a
+                         newline)
+                        (write " -> " >> pretty b)
             _ -> prettyTy dty
         collapseFaps (TyFun _ arg result) = arg : collapseFaps result
         collapseFaps e = [e]
@@ -269,6 +291,12 @@ prettyAlt (Syntax.Alt _ p galts mbinds) =
                            (depend (write "where ")
                                    (pretty binds))
 
+writeElse e@(If _ _ _ _) = do
+  write "else "
+  pretty e
+writeElse e =
+  swing (write "else") (pretty e)
+
 -- | Expressions
 exp :: Exp NodeInfo -> Printer t ()
 exp e@(QuasiQuote _ "i" s) =
@@ -353,6 +381,16 @@ exp (Case _ e alts) =
      newline
      indentSpaces <- getIndentSpaces
      indented indentSpaces (lined (map (\x -> withCaseContext True $ pretty x >> newline) alts))
+
+exp (If _ p t e) =
+  do
+    indentSpaces <- getIndentSpaces
+    id
+       (swing (do write "if "
+                  pretty p
+                  (write " then") )
+              (pretty t >> twolines) )
+    writeElse e
 exp (List _ es) =
   do (ok,st) <- sandbox renderFlat
      if ok
