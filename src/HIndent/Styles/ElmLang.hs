@@ -326,27 +326,15 @@ exp e@(QuasiQuote _ "i" s) =
 -- line-separated.
 exp e@(InfixApp _ a op b) =
   infixApp e a op b Nothing
--- | We try to render everything on a flat line. More than one of the
--- arguments are not flat and it wouldn't be a single liner.
--- If the head is short we depend, otherwise we swing.
+--Taken from Johan Tibell style
 exp (App _ op a) =
-  do orig <- gets psIndentLevel
-     (headIsShort,st) <- isShort f
-     (maybeSwing $ not headIsShort) (do
-           put st
-           space)
-       (
-          do let flats = map isFlat args
-                 flatish =
-                   length (filter not flats) <
-                   2
-             if (headIsShort && flatish) ||
-                all id flats
-                then do ((singleLiner,overflow),st) <- sandboxNonOverflowing args
-                        if singleLiner && not overflow
-                           then put st
-                           else multi orig args headIsShort
-                else multi orig args headIsShort)
+  do (fits,st) <-
+       fitsOnOneLine (spaced (map pretty (f : args)))
+     if fits
+        then put st
+        else swing
+          (pretty f)
+          (lined (map pretty args))
   where (f,args) = flatten op [a]
         flatten :: Exp NodeInfo
                 -> [Exp NodeInfo]
@@ -596,6 +584,8 @@ flattenOpChain (InfixApp _ left op right) =
   [OpChainLink op] <>
   flattenOpChain right
 flattenOpChain e = [OpChainExp e]
+
+
 
 -- | Make the right hand side dependent if it's flat, otherwise
 -- newline it.

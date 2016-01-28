@@ -177,10 +177,7 @@ mkNamedVar name =
 
 mkRigid :: String -> IO Variable
 mkRigid name =
-  UF.fresh $
-  mkDescriptor (Var Rigid
-                (toSuper name)
-                (Just name))
+  UF.fresh $ mkDescriptor (Var Rigid (toSuper name) (Just name))
 
 
 toSuper :: String -> Maybe Super
@@ -251,8 +248,7 @@ existsNumber f =
 toSrcType :: Variable -> IO T.Canonical
 toSrcType variable =
   do  usedNames <- getVarNames variable
-      State.evalStateT (variableToSrcType variable)
-      (makeNameState usedNames)
+      State.evalStateT (variableToSrcType variable) (makeNameState usedNames)
 
 
 variableToSrcType :: Variable -> StateT NameState IO T.Canonical
@@ -265,16 +261,18 @@ variableToSrcType variable =
 
       else
         do  liftIO $
-              UF.modifyDescriptor variable
-              (\desc -> 
-                  desc
-                    { _mark = occursMark })
+              UF.modifyDescriptor
+                variable
+                (\desc -> 
+                    desc
+                      { _mark = occursMark })
             srcType <- contentToSrcType variable (_content descriptor)
             liftIO $
-              UF.modifyDescriptor variable
-              (\desc -> 
-                  desc
-                    { _mark = mark })
+              UF.modifyDescriptor
+                variable
+                (\desc -> 
+                    desc
+                      { _mark = mark })
             return srcType
 
 
@@ -378,37 +376,42 @@ getFreshName maybeSuper =
   case maybeSuper of
     Nothing ->
       do  names <- State.gets _freeNames
-          State.modify (\state -> 
-                           state
-                             { _freeNames = tail names })
+          State.modify
+            (\state -> 
+                state
+                  { _freeNames = tail names })
           return (head names)
 
     Just Number ->
       do  primes <- State.gets _numberPrimes
-          State.modify (\state -> 
-                           state
-                             { _numberPrimes = primes + 1 })
+          State.modify
+            (\state -> 
+                state
+                  { _numberPrimes = primes + 1 })
           return ("number" ++ replicate primes '\'')
 
     Just Comparable ->
       do  primes <- State.gets _comparablePrimes
-          State.modify (\state -> 
-                           state
-                             { _comparablePrimes = primes + 1 })
+          State.modify
+            (\state -> 
+                state
+                  { _comparablePrimes = primes + 1 })
           return ("comparable" ++ replicate primes '\'')
 
     Just Appendable ->
       do  primes <- State.gets _appendablePrimes
-          State.modify (\state -> 
-                           state
-                             { _appendablePrimes = primes + 1 })
+          State.modify
+            (\state -> 
+                state
+                  { _appendablePrimes = primes + 1 })
           return ("appendable" ++ replicate primes '\'')
 
     Just CompAppend ->
       do  primes <- State.gets _compAppendPrimes
-          State.modify (\state -> 
-                           state
-                             { _compAppendPrimes = primes + 1 })
+          State.modify
+            (\state -> 
+                state
+                  { _compAppendPrimes = primes + 1 })
           return ("compappend" ++ replicate primes '\'')
 
 
@@ -421,9 +424,10 @@ getVarNames var =
         return Set.empty
 
       else
-        do  UF.setDescriptor var
-            (desc
-               { _mark = getVarNamesMark })
+        do  UF.setDescriptor
+              var
+              (desc
+                 { _mark = getVarNamesMark })
             getVarNamesHelp (_content desc)
 
 
