@@ -25,6 +25,8 @@ import Language.Haskell.Exts.Parser (ParseResult(..))
 import Prelude hiding (exp)
 import Data.Monoid hiding (Alt)
 
+import           Data.Text.Lazy.Builder (Builder)
+
 import qualified Language.Haskell.Exts.Annotated.Syntax as Syntax
 
 --------------------------------------------------------------------------------
@@ -361,26 +363,32 @@ exp (Do _ stmts) =
 exp (RecConstr _ n fs) =
   do indentSpaces <- getIndentSpaces
      swing (pretty n)
-            (spaceBraces (prefixedLined ", "
+            (spacedDelim "{" "}" (prefixedLined ", "
                                    (map pretty fs)))
 exp (RecUpdate _ n fs) =
   do indentSpaces <- getIndentSpaces
      swing (pretty n)
-            (spaceBraces (prefixedLined ", "
+            (spacedDelim "{" "}" (prefixedLined ", "
                                    (map pretty fs)))
 exp (Tuple _ boxed exps) =
-  depend (write (case boxed of
-                   Unboxed -> "(#"
-                   Boxed -> "("))
-         (do (fits,_) <- fitsOnOneLine p
-             if fits
-                then p
-                else prefixedLined ", "
-                                   (map pretty exps)
-             write (case boxed of
-                      Unboxed -> "#)"
-                      Boxed -> ")"))
-  where p = commas (map pretty exps)
+  do
+    (ok,st) <- sandbox renderFlat
+    if ok
+          then put st
+          else spacerFn (prefixedLined ", "
+                                       (map pretty exps))
+    where
+      spacerFn = case boxed of
+          Unboxed -> spacedDelim "(#" "#)"
+          Boxed -> spacedDelim "(" ")"
+      renderFlat =
+            do line <- gets psLine
+               parens (commas (map pretty exps))
+               st <- get
+               columnLimit <- getColumnLimit
+               let overflow = psColumn st > columnLimit
+                   single = psLine st == line
+               return (not overflow && single)
 --Space after each case expression
 exp (Case _ e alts) =
   do depend (write "case ")
@@ -389,6 +397,17 @@ exp (Case _ e alts) =
      newline
      indentSpaces <- getIndentSpaces
      indented indentSpaces (lined (map (\x -> withCaseContext True $ pretty x >> newline) alts))
+
+--Special case: always indent if condition of if is an if
+exp (If _ p@(If _ _ _ _) t e) =
+  do
+    indentSpaces <- getIndentSpaces
+    id
+       (swing (do swing (write "if ") (pretty p)
+                  newline
+                  (write " then") )
+              (pretty t >> twolines) )
+    writeElse e
 
 exp (If _ p t e) =
   do
@@ -403,7 +422,7 @@ exp (List _ es) =
   do (ok,st) <- sandbox renderFlat
      if ok
         then put st
-        else brackets (prefixedLined ", "
+        else spacedDelim "[" "]" (prefixedLined ", "
                                      (map pretty es))
   where renderFlat =
           do line <- gets psLine
@@ -603,12 +622,15 @@ dependOrNewline left right f =
                 (f right)
 
 -- | Wrap in braces.
-spaceBraces :: MonadState (PrintState s) m => m a -> m a
-spaceBraces p =
-  depend (write "{ ")
+spacedDelim :: MonadState (PrintState s) m => Builder -> Builder -> m a -> m a
+spacedDelim start end p =
+  depend (write start >> space)
          (do v <- p
-             write " }"
+             space
+             write end
              return v)
+
+
 
 maybeSwing True x y = swing x y
 maybeSwing False x y = x >> y
