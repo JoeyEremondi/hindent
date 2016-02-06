@@ -38,7 +38,7 @@ shortName = 20
 
 -- | Column limit: 80
 smallColumnLimit :: Int64
-smallColumnLimit = 80
+smallColumnLimit = 100
 
 -- | Empty state.
 data State =
@@ -62,7 +62,7 @@ elmLang =
            ,Extender prettyModule
            , Extender conDecl]
         ,styleDefConfig =
-           defaultConfig {configMaxColumns = 80
+           defaultConfig {configMaxColumns = 100
                          ,configIndentSpaces = 2
                          , configClearEmptyLines = True}
         ,styleCommentPreprocessor = return}
@@ -278,7 +278,7 @@ stmt :: Stmt NodeInfo -> Printer t ()
 stmt (Qualifier _ e@(InfixApp _ a op b)) =
   do col <- fmap (psColumn . snd)
                  (sandbox (write ""))
-     infixApp e a op b (Just col)
+     infixApp e (Just col)
 stmt (Generator _ p e) =
   do indentSpaces <- getIndentSpaces
      pretty p
@@ -327,7 +327,7 @@ exp e@(QuasiQuote _ "i" s) =
 -- if any of the arguments are not "flat" then that expression is
 -- line-separated.
 exp e@(InfixApp _ a op b) =
-  infixApp e a op b Nothing
+  infixApp e Nothing
 --Taken from Johan Tibell style
 exp (App _ op a) =
   do (fits,st) <-
@@ -354,7 +354,7 @@ exp (Lambda _ ps b) =
                (indented 2 .
                 pretty))
   where maybeSpace = case ps of
-                       (PBangPat {}):_ -> space
+                       (PBangPat{}):_ -> space
                        (PIrrPat {}):_ -> space
                        _ -> return ()
 exp (Do _ stmts) =
@@ -379,11 +379,11 @@ exp (Tuple _ boxed exps) =
                                        (map pretty exps))
     where
       spacerFn = case boxed of
-          Unboxed -> spacedDelim "(#" "#)"
-          Boxed -> spacedDelim "(" ")"
+          Unboxed -> spacedDelim "(# " "#)"
+          Boxed -> spacedDelim "( " " )"
       renderFlat =
             do line <- gets psLine
-               parens (commas (map pretty exps))
+               elmParens (commas (map pretty exps))
                st <- get
                columnLimit <- getColumnLimit
                let overflow = psColumn st > columnLimit
@@ -402,11 +402,8 @@ exp (Case _ e alts) =
 exp (If _ p@(If _ _ _ _) t e) =
   do
     indentSpaces <- getIndentSpaces
-    id
-       (swing (do swing (write "if ") (pretty p)
-                  newline
-                  (write " then") )
-              (pretty t >> twolines) )
+    swing (write "if ") ((elmParens $ pretty p) >> twolines)
+    swing (write "then ") (pretty t >> twolines)
     writeElse e
 
 exp (If _ p t e) =
@@ -416,7 +413,7 @@ exp (If _ p t e) =
        (swing (do write "if "
                   pretty p
                   (write " then") )
-              (pretty t >> twolines) )
+              (pretty t >> newline) )
     writeElse e
 exp (List _ es) =
   do (ok,st) <- sandbox renderFlat
@@ -557,37 +554,46 @@ fitsInColumnLimit p =
 --------------------------------------------------------------------------------
 -- Helpers
 
+
 infixApp :: Exp NodeInfo
-         -> Exp NodeInfo
-         -> QOp NodeInfo
-         -> Exp NodeInfo
          -> Maybe Int64
          -> Printer s ()
-infixApp e a op b indent =
-  do (fits,st) <-
+infixApp e indent =
+  do
+     let wholeChain@(OpChainExp a : chain) = (flattenOpChain e)
+     (fits,st) <-
        fitsOnOneLine
          (spaced (map (\link ->
                          case link of
                            OpChainExp e' -> pretty e'
                            OpChainLink qop -> pretty qop)
-                      (flattenOpChain e)))
+                      wholeChain))
+
+
      if fits
         then put st
-        else do prettyWithIndent a
-                space
-                pretty op
-                newline
-                case indent of
-                  Nothing -> prettyWithIndent b
-                  Just col ->
-                    do indentSpaces <- getIndentSpaces
-                       column (col + indentSpaces)
-                              (prettyWithIndent b)
-  where prettyWithIndent e' =
-          case e' of
-            (InfixApp _ a' op' b') ->
-              infixApp e' a' op' b' indent
-            _ -> pretty e'
+        else
+          swing (pretty a) $
+          forM_ chain $ \link -> do
+                  let
+                    toPrint =
+                      case link of
+                        OpChainExp e' -> pretty e' >> newline
+                        OpChainLink qop -> pretty qop >> space
+                  case indent of
+                    Nothing ->
+                      do
+                        toPrint
+                    Just col ->
+                      toPrint
+                      --do indentSpaces <- getIndentSpaces
+                      --   column (col + indentSpaces)
+                      --          (toPrint)
+  --where prettyWithIndent e' =
+  --        case e' of
+  --          (InfixApp _ a' op' b') ->
+  --            infixApp e' a' op' b' indent
+  --          _ -> pretty e'
 
 -- | A link in a chain of operator applications.
 data OpChainLink l
@@ -626,7 +632,6 @@ spacedDelim :: MonadState (PrintState s) m => Builder -> Builder -> m a -> m a
 spacedDelim start end p =
   depend (write start >> space)
          (do v <- p
-             space
              write end
              return v)
 
@@ -634,3 +639,11 @@ spacedDelim start end p =
 
 maybeSwing True x y = swing x y
 maybeSwing False x y = x >> y
+
+
+elmParens :: MonadState (PrintState s) m => m a -> m a
+elmParens p =
+  depend (write "( ")
+         (do v <- p
+             write " )"
+             return v)

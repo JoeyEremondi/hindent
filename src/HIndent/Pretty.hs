@@ -477,12 +477,12 @@ instance Pretty Pat where
                (spaced (map pretty args))
       PTuple _ boxed pats ->
         depend (write (case boxed of
-                         Unboxed -> "(#"
-                         Boxed -> "("))
+                         Unboxed -> "(# "
+                         Boxed -> "( "))
                (do commas (map pretty pats)
                    write (case boxed of
-                            Unboxed -> "#)"
-                            Boxed -> ")"))
+                            Unboxed -> " #)"
+                            Boxed -> " )"))
       PList _ ps ->
         brackets (commas (map pretty ps))
       PParen _ e -> parens (pretty e)
@@ -550,12 +550,12 @@ instance Pretty Type where
                (pretty b)
       TyTuple _ boxed tys ->
         depend (write (case boxed of
-                         Unboxed -> "(#"
-                         Boxed -> "("))
+                         Unboxed -> "(# "
+                         Boxed -> "( "))
                (do commas (map pretty tys)
                    write (case boxed of
-                            Unboxed -> "#)"
-                            Boxed -> ")"))
+                            Unboxed -> " #)"
+                            Boxed -> " )"))
       TyList _ t -> brackets (pretty t)
       TyParArray _ t ->
         brackets (do write ":"
@@ -652,21 +652,21 @@ exp (MDo _ stmts) =
          (lined (map pretty stmts))
 exp (Tuple _ boxed exps) =
   depend (write (case boxed of
-                   Unboxed -> "(#"
-                   Boxed -> "("))
+                   Unboxed -> "(# "
+                   Boxed -> "( "))
          (do prefixedLined ", "
                            (map pretty exps)
              write (case boxed of
-                      Unboxed -> "#)"
-                      Boxed -> ")"))
+                      Unboxed -> " #)"
+                      Boxed -> " )"))
 exp (TupleSection _ boxed mexps) =
   depend (write (case boxed of
-                   Unboxed -> "(#"
-                   Boxed -> "("))
+                   Unboxed -> "(# "
+                   Boxed -> "( "))
          (do commas (map (maybe (return ()) pretty) mexps)
              write (case boxed of
-                      Unboxed -> "#)"
-                      Boxed -> ")"))
+                      Unboxed -> " #)"
+                      Boxed -> " )"))
 exp (List _ es) =
   brackets (prefixedLined ", "
                           (map pretty es))
@@ -1172,13 +1172,13 @@ instance Pretty SpecialCon where
       ListCon _ -> write "[]"
       FunCon _ -> write "->"
       TupleCon _ Boxed i ->
-        string ("(" ++
+        string ("( " ++
                 replicate (i - 1) ',' ++
-                ")")
+                " )")
       TupleCon _ Unboxed i ->
-        string ("(#" ++
+        string ("(# " ++
                 replicate (i - 1) ',' ++
-                "#)")
+                " #)")
       Cons _ -> write ":"
       UnboxedSingleCon _ -> write "(##)"
 

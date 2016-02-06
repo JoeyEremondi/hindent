@@ -12,12 +12,13 @@ ratio =
 -- foo=(case x of {True->1;False->3})
 bar =
   (if 
-     if a then
-       True
+     (if a then
+        True
 
-     else
-       False
-    then
+      else
+        False)
+
+   then 
      "a"
 
    else
